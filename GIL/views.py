@@ -1,18 +1,21 @@
-
-from rest_framework import viewsets, permissions
+from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import update_last_login
+from django.utils.decorators import method_decorator
 from .models import (
     TitleTransferTypes, TitleProcess, Client,
-    Surveyor, Payment, TitleDocument
+    Surveyor, Payment, TitleDocument, User
 )
 from .serializers import (
     TitleTransferTypesSerializer, TitleProcessSerializer,
     ClientSerializer, SurveyorSerializer,
-    PaymentSerializer, TitleDocumentSerializer,UserSerializer, LoginSerializer
+    PaymentSerializer, TitleDocumentSerializer, UserSerializer, LoginSerializer
 )
+
 class UserRegistrationView(APIView):
     permission_classes = (permissions.AllowAny,)
 
@@ -34,19 +37,23 @@ class UserLoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            user = authenticate(
-                email=serializer.validated_data['email'],
-                password=serializer.validated_data['password']
-            )
+            email = serializer.validated_data['email']
+            password = serializer.validated_data['password']
+            user = authenticate(request, email=email, password=password)
+
             if user:
                 refresh = RefreshToken.for_user(user)
+                update_last_login(None, user)  # Updates last login timestamp
                 return Response({
                     'user': UserSerializer(user).data,
                     'refresh': str(refresh),
                     'access': str(refresh.access_token),
-                })
-            return Response({'error': 'Invalid credentials'}, status=status.HTTP_401_UNAUTHORIZED)
+                }, status=status.HTTP_200_OK)
+
+            return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 class TitleTransferTypesViewSet(viewsets.ModelViewSet):
     queryset = TitleTransferTypes.objects.all()
     serializer_class = TitleTransferTypesSerializer
@@ -61,6 +68,7 @@ class ClientViewSet(viewsets.ModelViewSet):
     queryset = Client.objects.all()
     serializer_class = ClientSerializer
     permission_classes = [permissions.IsAuthenticated]
+
     @action(detail=True, methods=['get'])
     def documents(self, request, pk=None):
         client = self.get_object()
@@ -72,6 +80,7 @@ class SurveyorViewSet(viewsets.ModelViewSet):
     queryset = Surveyor.objects.all()
     serializer_class = SurveyorSerializer
     permission_classes = [permissions.IsAuthenticated]
+
     @action(detail=True, methods=['post'])
     def toggle_status(self, request, pk=None):
         surveyor = self.get_object()
@@ -79,10 +88,12 @@ class SurveyorViewSet(viewsets.ModelViewSet):
         surveyor.status = "active" if surveyor.is_serving else "inactive"
         surveyor.save()
         return Response({'status': surveyor.status})
+
 class PaymentViewSet(viewsets.ModelViewSet):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
     permission_classes = [permissions.IsAuthenticated]
+
 class TitleDocumentViewSet(viewsets.ModelViewSet):
     queryset = TitleDocument.objects.all()
     serializer_class = TitleDocumentSerializer

@@ -20,11 +20,18 @@ class UserManager(BaseUserManager):
     def create_superuser(self, email, password=None, **extra_fields):
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+
+        if extra_fields.get("is_staff") is not True:
+            raise ValueError("Superuser must have is_staff=True.")
+        if extra_fields.get("is_superuser") is not True:
+            raise ValueError("Superuser must have is_superuser=True.")
+        
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=150, unique=True)
+    name = models.CharField(max_length=100, blank=True, null=True)
     first_name = models.CharField(max_length=30)
     last_name = models.CharField(max_length=30)
     date_joined = models.DateTimeField(default=timezone.now)
@@ -32,12 +39,12 @@ class User(AbstractUser):
 
     groups = models.ManyToManyField(
         "auth.Group",
-        related_name="gil_user_groups",  # Custom related_name to avoid conflict
+        related_name="gil_user_groups",
         blank=True
     )
     user_permissions = models.ManyToManyField(
         "auth.Permission",
-        related_name="gil_user_permissions",  # Custom related_name to avoid conflict
+        related_name="gil_user_permissions",
         blank=True
     )
 
@@ -45,6 +52,15 @@ class User(AbstractUser):
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username", "first_name", "last_name"]
+
+    def save(self, *args, **kwargs):
+        """Automatically split name into first_name and last_name."""
+        if self.name:
+            name_parts = self.name.split(" ", 1)
+            self.first_name = name_parts[0]
+            self.last_name = name_parts[1] if len(name_parts) > 1 else ""
+        super().save(*args, **kwargs)
+
 
     def __str__(self):
         return self.email
@@ -165,6 +181,3 @@ class TitleDocument(models.Model):
 
     def __str__(self):
         return f"{self.client.firstname} {self.client.lastname} - {self.status}"
-
-class serializers:
-    pass
