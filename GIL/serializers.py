@@ -35,10 +35,26 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, data):
         email = data.get("email")
         password = data.get("password")
-        user = authenticate(email=email, password=password)
-        if not user:
+
+        try:
+            # Get user by email
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
             raise serializers.ValidationError("Invalid email or password.")
-        return user
+
+        # Check password
+        if not user.check_password(password):
+            raise serializers.ValidationError("Invalid email or password.")
+
+        # Ensure the user is active
+        if not user.is_active:
+            raise serializers.ValidationError("User account is disabled.")
+
+        return {
+             'email': email,
+            'user': user
+        }
+
 
 class TitleTransferTypesSerializer(serializers.ModelSerializer):
     class Meta:

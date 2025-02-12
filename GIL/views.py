@@ -37,22 +37,21 @@ class UserLoginView(APIView):
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
-            email = serializer.validated_data['email']
-            password = serializer.validated_data['password']
-            user = authenticate(request, email=email, password=password)
+            # Get the validated user object
+            user = serializer.validated_data['user']
+            
+            # Generate tokens for the user
+            refresh = RefreshToken.for_user(user)
+            update_last_login(None, user)  # Update last login timestamp
 
-            if user:
-                refresh = RefreshToken.for_user(user)
-                update_last_login(None, user)  # Updates last login timestamp
-                return Response({
-                    'user': UserSerializer(user).data,
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                }, status=status.HTTP_200_OK)
-
-            return Response({'error': 'Invalid email or password'}, status=status.HTTP_401_UNAUTHORIZED)
+            return Response({
+                'user': UserSerializer(user).data,
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }, status=status.HTTP_200_OK)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class TitleTransferTypesViewSet(viewsets.ModelViewSet):
     queryset = TitleTransferTypes.objects.all()
